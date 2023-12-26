@@ -1,5 +1,6 @@
 use rand::thread_rng;
 use rand::seq::SliceRandom;
+use std::{thread, time};
 
 struct Tetronimo {
     // 4x4 grid
@@ -86,11 +87,11 @@ impl Tetronimo {
     }
 
     fn move_down(&mut self) {
-        self.y += 1;
+        self.x += 1;
     }
 
     fn move_up(&mut self) {
-        self.y -= 1;
+        self.x -= 1;
     }
 }
 
@@ -358,6 +359,18 @@ impl game_board {
         return board;
     }
 
+    fn block(&self, x: usize, y: usize) -> bool {
+        if x < 0 || y < 0 {
+            return true;
+        }
+
+        if x >= 20 || y >= 10 {
+            return true;
+        }
+
+        return self.blocks[x][y];
+    }
+
     fn draw(&self, mut string: String) -> String
     {
         let mut cur_blocks = self.blocks;
@@ -370,7 +383,7 @@ impl game_board {
             }
         }
 
-        for row in cur_blocks.iter().rev() {
+        for row in cur_blocks.iter() {
             for block in row.iter() {
                 if *block {
                     string += "x ";
@@ -386,10 +399,52 @@ impl game_board {
         string += "\n";
         return string;
     }
+
+    fn is_overlapping(&self, tetronimo: &Tetronimo) -> bool {
+        for x in 0..4 {
+            for y in 0..4 {
+                if tetronimo.blocks[x][y] && self.block(tetronimo.x + x, tetronimo.y + y) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    fn lower(&mut self) {
+        self.current_tetronimo.move_down();
+        if self.is_overlapping(&self.current_tetronimo) {
+            self.current_tetronimo.move_up();
+            for x in 0..4 {
+                for y in 0..4 {
+                    if self.current_tetronimo.blocks[x][y] {
+                        self.blocks[self.current_tetronimo.x + x][self.current_tetronimo.y + y] = true;
+                    }
+                }
+            }
+
+            let mut optional_tetronimo: Option<Tetronimo> = self.current_batch.pop();
+            if optional_tetronimo.is_none() {
+                self.current_batch = generate_batch();
+                self.current_batch.shuffle(&mut thread_rng());
+                optional_tetronimo = self.current_batch.pop();
+            }
+            self.current_tetronimo = optional_tetronimo.unwrap();
+
+            if self.is_overlapping(&self.current_tetronimo) {
+                panic!("Game over");
+            }
+        }
+    }
 }
 
 fn main() {
     let mut board = game_board::new();
-    println!("{}", board.draw(String::new()));
+    while true {
+        board.lower();
+        println!("{}", board.draw(String::new()));
+
+        thread::sleep(time::Duration::from_millis(100));
+    }
 }
 
