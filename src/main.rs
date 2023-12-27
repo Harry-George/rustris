@@ -346,6 +346,8 @@ struct GameBoard {
 
     current_batch: Vec<Tetronimo>,
     current_tetronimo: Tetronimo,
+    score: u32,
+    finished: bool,
 }
 
 
@@ -358,6 +360,8 @@ impl GameBoard {
             blocks: [[false; 10]; 20],
             current_batch,
             current_tetronimo: optional_tetronimo.unwrap(),
+            score: 0,
+            finished: false,
         };
         return board;
     }
@@ -400,7 +404,19 @@ impl GameBoard {
 
             string += "<br />";
         }
-        string += "\n";
+        string += "</table>";
+        string += "Score: ";
+        string += &self.score.to_string();
+
+        if self.finished {
+            string += "<br />";
+            // make text red and big
+            string += "<span style=\"color: red; font-size: 200%\">";
+
+
+            string += "Game over";
+            string += "<br />";
+        }
         return string;
     }
 
@@ -437,6 +453,7 @@ impl GameBoard {
                     }
                 }
                 if full {
+                    self.score += 100;
                     for y in 0..10 {
                         self.blocks[x][y] = false;
                     }
@@ -450,14 +467,15 @@ impl GameBoard {
 
             let mut optional_tetronimo: Option<Tetronimo> = self.current_batch.pop();
             if optional_tetronimo.is_none() {
-                self.current_batch = generate_batch();
-                self.current_batch.shuffle(&mut thread_rng());
+                let mut next_batch = generate_batch();
+                next_batch.shuffle(&mut thread_rng());
+                self.current_batch = next_batch;
                 optional_tetronimo = self.current_batch.pop();
             }
             self.current_tetronimo = optional_tetronimo.unwrap();
 
             if self.is_overlapping(&self.current_tetronimo) {
-                panic!("Game over");
+                self.finished = true;
             }
         }
     }
@@ -471,6 +489,20 @@ impl GameBoard {
                 self.current_tetronimo.move_right();
             }
         }
+    }
+
+    fn move_left(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.current_tetronimo.move_left();
+    }
+
+    fn move_right(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.current_tetronimo.move_right();
     }
 }
 
@@ -517,7 +549,7 @@ pub fn start_app() {
     // Schedule the closure for execution after the delay
     window().set_interval_with_callback_and_timeout_and_arguments_0(
         closure.as_ref().unchecked_ref(),
-        300,
+        200,
     ).expect("Problem scheduling interval");
 
 
@@ -533,16 +565,16 @@ pub fn start_app() {
         match ev.key().as_str() {
             "a" => {
                 log!("left");
-                app_state_inner.board.current_tetronimo.move_left();
+                app_state_inner.board.move_left();
                 if app_state_inner.board.is_overlapping(&app_state_inner.board.current_tetronimo) {
-                    app_state_inner.board.current_tetronimo.move_right();
+                    app_state_inner.board.move_right();
                 }
             }
             "d" => {
                 log!("right");
-                app_state_inner.board.current_tetronimo.move_right();
+                app_state_inner.board.move_right();
                 if app_state_inner.board.is_overlapping(&app_state_inner.board.current_tetronimo) {
-                    app_state_inner.board.current_tetronimo.move_left();
+                    app_state_inner.board.move_left();
                 }
             }
             "w" => {
