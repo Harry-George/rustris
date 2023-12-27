@@ -1,6 +1,7 @@
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 use std::{thread, time};
+use std::rc::Rc;
 
 struct Tetronimo {
     // 4x4 grid
@@ -394,7 +395,7 @@ impl game_board {
             // remove trailing space
             string.pop();
 
-            string += "\n";
+            string += "<br />";
         }
         string += "\n";
         return string;
@@ -438,13 +439,114 @@ impl game_board {
     }
 }
 
-fn main() {
-    let mut board = game_board::new();
-    while true {
-        board.lower();
-        println!("{}", board.draw(String::new()));
+use leptos::*;
 
-        thread::sleep(time::Duration::from_millis(100));
-    }
+// fn main() {
+//     let mut board = game_board::new();
+//     while true {
+//         board.lower();
+//         let board_str = board.draw(String::new());
+//         let board_str_rc = Rc::new(board_str);
+//
+//         println!("starting");
+//
+//         thread::sleep(time::Duration::from_millis(100));
+//         mount_to_body(move || {
+//             let board_str = board_str_rc.clone();
+//             println!("{}", board_str.to_string());
+//
+//             view! { <p>{move || board_str.to_string()}</p> }
+//         })
+//     }
+// }
+use leptos::prelude::*;
+use leptos::logging::*;
+
+//
+// fn main() {
+//     let message: String = String::new();
+//     let (read_board_str, write_board_str) = create_signal(message);
+//
+//
+//     error!("badger badger");
+//
+//     mount_to_body(move || {
+//         view! { <div inner_html={move || read_board_str.get()}></div> }
+//     });
+//
+//     std::panic::set_hook(Box::new(|panic_info| {
+//         error!("Panic: {}", panic_info);
+//     }));
+//     let mut board = game_board::new();
+//
+//
+//     loop {
+//         log! { "lowering" }
+//         board.lower();
+//         let board_str = board.draw(String::new());
+//         write_board_str.set(board_str);
+//         // really slow event loop
+//
+//         // futures::executor::block_on(sleep(100));
+//     }
+// }
+//
+
+use wasm_bindgen::prelude::*;
+use std::cell::RefCell;
+
+struct AppState {
+    board: game_board,
+    // read_board_str: Signal<String>,
+    write_board_str: WriteSignal<String>,
 }
 
+#[wasm_bindgen]
+pub fn start_app() {
+    // Initialize your app state
+    std::panic::set_hook(Box::new(|panic_info| {
+        error!("Panic: {}", panic_info);
+    }));
+    let (read_board_str, write_board_str) = create_signal(String::new());
+    let app_state = Rc::new(RefCell::new(AppState {
+        board: game_board::new(),
+        // read_board_str: Signal::from(read_board_str),
+        write_board_str: WriteSignal::from(write_board_str),
+    }));
+
+    // {
+    //     let app_state_clone = app_state.clone().borrow_mut();
+    //
+    //     app_state_clone.write_board_str.set(app_state_clone.board.draw(String::new()));
+    // }
+
+    let app_state_clone = app_state.clone();
+    let app_state_clone2 = app_state.clone();
+    // Create a closure to be executed after the delay
+    let closure = Closure::wrap(Box::new(move || {
+        log! { "called" }
+        let _app_state_inner = Rc::clone(&app_state_clone2);
+        let mut app_state_inner = _app_state_inner.borrow_mut();
+        app_state_inner.board.lower();
+        app_state_inner.write_board_str.set(app_state_inner.board.draw(String::new()));
+    }) as Box<dyn FnMut()>);
+
+    // Schedule the closure for execution after the delay
+    window().set_interval_with_callback_and_timeout_and_arguments_0(
+        closure.as_ref().unchecked_ref(),
+        100,
+    ).expect("Problem scheduling interval");
+
+
+    // Mount the initial view
+    mount_to_body(move || {
+        view! { <div inner_html={move || read_board_str.get()}></div> }
+    });
+
+    closure.forget();
+}
+
+
+fn main() {
+    start_app();
+}
