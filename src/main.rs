@@ -1,3 +1,4 @@
+use leptos::ev::Event;
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 use std::{thread, time};
@@ -80,11 +81,13 @@ impl Tetronimo {
     }
 
     fn move_left(&mut self) {
-        self.x -= 1;
+        if self.y > 0 {
+            self.y -= 1;
+        }
     }
 
     fn move_right(&mut self) {
-        self.x += 1;
+        self.y += 1;
     }
 
     fn move_down(&mut self) {
@@ -376,6 +379,8 @@ impl game_board {
     {
         let mut cur_blocks = self.blocks;
 
+        string += "<table>";
+
         for x in 0..4 {
             for y in 0..4 {
                 if self.current_tetronimo.blocks[x][y] {
@@ -385,13 +390,17 @@ impl game_board {
         }
 
         for row in cur_blocks.iter() {
+            string += "<tr>";
             for block in row.iter() {
+                string += "<td>";
                 if *block {
-                    string += "x ";
+                    string += "x";
                 } else {
-                    string += "- ";
+                    string += "**";
                 }
+                string += "</td>";
             }
+            string += "</tr>";
             // remove trailing space
             string.pop();
 
@@ -420,6 +429,27 @@ impl game_board {
                 for y in 0..4 {
                     if self.current_tetronimo.blocks[x][y] {
                         self.blocks[self.current_tetronimo.x + x][self.current_tetronimo.y + y] = true;
+                    }
+                }
+            }
+
+            // Delete any full lines
+            for x in 0..20 {
+                let mut full = true;
+                for y in 0..10 {
+                    if !self.blocks[x][y] {
+                        full = false;
+                        break;
+                    }
+                }
+                if full {
+                    for y in 0..10 {
+                        self.blocks[x][y] = false;
+                    }
+                    for x2 in (1..x).rev() {
+                        for y in 0..10 {
+                            self.blocks[x2 + 1][y] = self.blocks[x2][y];
+                        }
                     }
                 }
             }
@@ -520,12 +550,15 @@ pub fn start_app() {
     //     app_state_clone.write_board_str.set(app_state_clone.board.draw(String::new()));
     // }
 
-    let app_state_clone = app_state.clone();
-    let app_state_clone2 = app_state.clone();
+    let app_state_clone_for_window = app_state.clone();
+    let app_state_clone_for_closure = app_state.clone();
+    let app_state_clone_for_event_handler = app_state.clone();
+
+
     // Create a closure to be executed after the delay
     let closure = Closure::wrap(Box::new(move || {
         log! { "called" }
-        let _app_state_inner = Rc::clone(&app_state_clone2);
+        let _app_state_inner = Rc::clone(&app_state_clone_for_closure);
         let mut app_state_inner = _app_state_inner.borrow_mut();
         app_state_inner.board.lower();
         app_state_inner.write_board_str.set(app_state_inner.board.draw(String::new()));
@@ -542,6 +575,41 @@ pub fn start_app() {
     mount_to_body(move || {
         view! { <div inner_html={move || read_board_str.get()}></div> }
     });
+
+
+    let handle = leptos::leptos_dom::helpers::window_event_listener(ev::keypress, move |ev| {
+        let mut app_state_inner = app_state_clone_for_event_handler.borrow_mut();
+
+        match ev.key().as_str() {
+            "a" => {
+                log!("left");
+                app_state_inner.board.current_tetronimo.move_left();
+                if app_state_inner.board.is_overlapping(&app_state_inner.board.current_tetronimo) {
+                    app_state_inner.board.current_tetronimo.move_right();
+                }
+            }
+            "d" => {
+                log!("right");
+                app_state_inner.board.current_tetronimo.move_right();
+                if app_state_inner.board.is_overlapping(&app_state_inner.board.current_tetronimo) {
+                    app_state_inner.board.current_tetronimo.move_left();
+                }
+            }
+            "w" => {
+                log!("rotate");
+                app_state_inner.board.current_tetronimo.rotate();
+            }
+            "s" => {
+                log!("down");
+                app_state_inner.board.lower();
+            }
+            x => {
+                log!("unknown key {}", x);
+            }
+        }
+        app_state_inner.write_board_str.set(app_state_inner.board.draw(String::new()));
+    });
+
 
     closure.forget();
 }
