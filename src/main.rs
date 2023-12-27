@@ -1,7 +1,5 @@
-use leptos::ev::Event;
 use rand::thread_rng;
 use rand::seq::SliceRandom;
-use std::{thread, time};
 use std::rc::Rc;
 
 struct Tetronimo {
@@ -27,6 +25,7 @@ impl Tetronimo {
         return tetronimo;
     }
 
+    #[test]
     fn draw(&self, mut string: String) -> String
     {
         for row in self.blocks.iter() {
@@ -342,7 +341,7 @@ x - - -
     assert_eq!(result, expected);
 }
 
-struct game_board {
+struct GameBoard {
     blocks: [[bool; 10]; 20],
 
     current_batch: Vec<Tetronimo>,
@@ -350,12 +349,12 @@ struct game_board {
 }
 
 
-impl game_board {
-    fn new() -> game_board {
+impl GameBoard {
+    fn new() -> GameBoard {
         let mut current_batch = generate_batch();
         current_batch.shuffle(&mut thread_rng());
-        let mut optional_tetronimo: Option<Tetronimo> = current_batch.pop();
-        let mut board = game_board {
+        let optional_tetronimo: Option<Tetronimo> = current_batch.pop();
+        let board = GameBoard {
             blocks: [[false; 10]; 20],
             current_batch,
             current_tetronimo: optional_tetronimo.unwrap(),
@@ -364,10 +363,6 @@ impl game_board {
     }
 
     fn block(&self, x: usize, y: usize) -> bool {
-        if x < 0 || y < 0 {
-            return true;
-        }
-
         if x >= 20 || y >= 10 {
             return true;
         }
@@ -466,11 +461,21 @@ impl game_board {
             }
         }
     }
+
+    fn rotate(&mut self) {
+        self.current_tetronimo.rotate();
+        if self.is_overlapping(&self.current_tetronimo) {
+            if self.current_tetronimo.y > 1 {
+                self.current_tetronimo.move_left();
+            } else {
+                self.current_tetronimo.move_right();
+            }
+        }
+    }
 }
 
 use leptos::*;
 
-use leptos::prelude::*;
 use leptos::logging::*;
 
 
@@ -478,7 +483,7 @@ use wasm_bindgen::prelude::*;
 use std::cell::RefCell;
 
 struct AppState {
-    board: game_board,
+    board: GameBoard,
     // read_board_str: Signal<String>,
     write_board_str: WriteSignal<String>,
 }
@@ -491,12 +496,11 @@ pub fn start_app() {
     }));
     let (read_board_str, write_board_str) = create_signal(String::new());
     let app_state = Rc::new(RefCell::new(AppState {
-        board: game_board::new(),
+        board: GameBoard::new(),
         // read_board_str: Signal::from(read_board_str),
         write_board_str: WriteSignal::from(write_board_str),
     }));
 
-    let app_state_clone_for_window = app_state.clone();
     let app_state_clone_for_closure = app_state.clone();
     let app_state_clone_for_event_handler = app_state.clone();
 
@@ -543,7 +547,7 @@ pub fn start_app() {
             }
             "w" => {
                 log!("rotate");
-                app_state_inner.board.current_tetronimo.rotate();
+                app_state_inner.board.rotate();
             }
             "s" => {
                 log!("down");
@@ -555,6 +559,8 @@ pub fn start_app() {
         }
         app_state_inner.write_board_str.set(app_state_inner.board.draw(String::new()));
     });
+
+    on_cleanup(move || handle.remove());
 
 
     closure.forget();
